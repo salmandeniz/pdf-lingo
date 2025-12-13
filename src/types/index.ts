@@ -23,17 +23,6 @@ export interface DrawingPath {
   width: number
 }
 
-export interface Translation {
-  id: string
-  originalText: string
-  translatedText: string
-  sourceLang: string
-  targetLang: string
-  pageNumber: number
-  position: { x: number; y: number }
-  visible: boolean
-}
-
 export interface TranslationService {
   id: 'google' | 'openrouter'
   name: string
