@@ -45,6 +45,8 @@ export interface PositionedTextItem {
   height: number
   fontSize: number
   fontFamily: string
+  fontWeight: 'normal' | 'bold'
+  fontStyle: 'normal' | 'italic'
 }
 
 export interface TranslatedTextItem extends PositionedTextItem {

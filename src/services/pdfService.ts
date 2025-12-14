@@ -107,6 +107,7 @@ export class PdfService {
 
     const viewport = page.getViewport({ scale })
     const textContent = await page.getTextContent()
+    const styles = textContent.styles as Record<string, { fontFamily: string }>
 
     const items: PositionedTextItem[] = []
 
@@ -120,6 +121,12 @@ export class PdfService {
       const fontSize = Math.abs(textItem.transform[0]) || Math.abs(textItem.transform[3]) || 12
       const [x, y] = viewport.convertToViewportPoint(tx, ty)
 
+      const fontStyle = styles[textItem.fontName]
+      const fontFamilyFromStyle = fontStyle?.fontFamily || ''
+      const fontNameLower = (fontFamilyFromStyle || textItem.fontName || '').toLowerCase()
+      const isBold = fontNameLower.includes('bold') || fontNameLower.includes('black') || fontNameLower.includes('heavy')
+      const isItalic = fontNameLower.includes('italic') || fontNameLower.includes('oblique')
+
       items.push({
         str: textItem.str,
         x,
@@ -127,7 +134,9 @@ export class PdfService {
         width: textItem.width * scale,
         height: fontSize * scale,
         fontSize: fontSize * scale,
-        fontFamily: textItem.fontName || 'sans-serif',
+        fontFamily: fontFamilyFromStyle || textItem.fontName || 'sans-serif',
+        fontWeight: isBold ? 'bold' : 'normal',
+        fontStyle: isItalic ? 'italic' : 'normal',
       })
     }
 

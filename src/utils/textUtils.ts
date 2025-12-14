@@ -60,6 +60,9 @@ export interface Paragraph {
     width: number
     height: number
     fontSize: number
+    fontFamily: string
+    fontWeight: 'normal' | 'bold'
+    fontStyle: 'normal' | 'italic'
 }
 
 export function groupIntoParagraphs(lines: PositionedTextItem[][]): Paragraph[] {
@@ -114,6 +117,19 @@ function buildParagraph(lines: PositionedTextItem[][]): Paragraph {
     const maxY = Math.max(...allItems.map(item => item.y + item.height))
     const avgFontSize = allItems.reduce((sum, item) => sum + item.fontSize, 0) / allItems.length
 
+    const fontCounts = new Map<string, number>()
+    allItems.forEach(item => {
+        const count = fontCounts.get(item.fontFamily) || 0
+        fontCounts.set(item.fontFamily, count + 1)
+    })
+    const fontFamily = [...fontCounts.entries()]
+        .sort((a, b) => b[1] - a[1])[0]?.[0] || 'serif'
+
+    const boldCount = allItems.filter(item => item.fontWeight === 'bold').length
+    const italicCount = allItems.filter(item => item.fontStyle === 'italic').length
+    const fontWeight = boldCount > allItems.length / 2 ? 'bold' : 'normal'
+    const fontStyle = italicCount > allItems.length / 2 ? 'italic' : 'normal'
+
     return {
         lines,
         text,
@@ -122,6 +138,9 @@ function buildParagraph(lines: PositionedTextItem[][]): Paragraph {
         width: maxX - x,
         height: maxY - y,
         fontSize: avgFontSize,
+        fontFamily,
+        fontWeight,
+        fontStyle,
     }
 }
 

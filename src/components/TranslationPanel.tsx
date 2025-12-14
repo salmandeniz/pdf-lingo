@@ -22,6 +22,9 @@ interface TranslatedParagraph {
   width: number
   height: number
   fontSize: number
+  fontFamily: string
+  fontWeight: 'normal' | 'bold'
+  fontStyle: 'normal' | 'italic'
   marginTop: number
 }
 
@@ -109,6 +112,9 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
                 width: pageInfo.width - para.x - 20,
                 height: para.height,
                 fontSize: para.fontSize,
+                fontFamily: para.fontFamily,
+                fontWeight: para.fontWeight,
+                fontStyle: para.fontStyle,
                 marginTop: 0,
               }
             } catch (error) {
@@ -240,7 +246,9 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
                   marginTop: para.marginTop,
                   maxWidth: para.width,
                   fontSize: para.fontSize,
-                  fontFamily: 'sans-serif',
+                  fontFamily: para.fontFamily,
+                  fontWeight: para.fontWeight,
+                  fontStyle: para.fontStyle,
                   color: '#000',
                   lineHeight: 1.4,
                   whiteSpace: 'normal',
