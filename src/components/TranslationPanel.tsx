@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { pdfService } from '../services/pdfService'
 import { translate } from '../services/translationService'
+import { translateWithVision, type VisionTranslatedBlock } from '../services/visionTranslationService'
 import {
   getBackgroundColor,
   groupIntoLines,
@@ -41,6 +42,9 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
   const [bgColor, setBgColor] = useState('rgb(255, 255, 255)')
   const [paragraphMasks, setParagraphMasks] = useState<ParagraphMask[]>([])
   const [translatedParagraphs, setTranslatedParagraphs] = useState<TranslatedParagraph[]>([])
+  const [visionBlocks, setVisionBlocks] = useState<VisionTranslatedBlock[]>([])
+  const [isVisionMode, setIsVisionMode] = useState(false)
+  const [isVisionProcessing, setIsVisionProcessing] = useState(false)
 
   const {
     currentPage,
@@ -59,6 +63,8 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
       setIsTranslating(true)
       setParagraphMasks([])
       setTranslatedParagraphs([])
+      setVisionBlocks([])
+      setIsVisionMode(false)
 
       try {
         const pageInfo = await pdfService.renderPage(currentPage, canvasRef.current, zoom)
@@ -169,6 +175,32 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
     settings.openRouterModel,
   ])
 
+  const handleVisionFix = async () => {
+    if (!canvasRef.current || !settings.openRouterApiKey) {
+      alert('OpenRouter API key is required for AI fix')
+      return
+    }
+
+    setIsVisionProcessing(true)
+    setVisionBlocks([])
+
+    const result = await translateWithVision(
+      canvasRef.current,
+      settings.targetLanguage,
+      settings.openRouterApiKey,
+      settings.visionModel
+    )
+
+    if (result.success) {
+      setVisionBlocks(result.blocks)
+      setIsVisionMode(true)
+    } else {
+      alert(`AI fix failed: ${result.error}`)
+    }
+
+    setIsVisionProcessing(false)
+  }
+
   if (!showTranslationPanel) return null
 
   return (
@@ -183,16 +215,39 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
           </svg>
           <span className="text-sm font-medium">Translation</span>
           <span className="text-xs text-gray-500 uppercase">{settings.targetLanguage}</span>
+          {isVisionMode && <span className="text-xs text-green-400 ml-2">AI</span>}
         </div>
-        <button
-          onClick={() => setShowTranslationPanel(false)}
-          className="p-1 hover:bg-gray-700 rounded transition-colors"
-          title="Close translation panel"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleVisionFix}
+            disabled={isVisionProcessing || isTranslating}
+            className="px-2 py-1 text-xs bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded transition-colors flex items-center gap-1"
+            title="AI ile layout ve font sorunlarini duzelt"
+          >
+            {isVisionProcessing ? (
+              <>
+                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span>AI Fix</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => setShowTranslationPanel(false)}
+            className="p-1 hover:bg-gray-700 rounded transition-colors"
+            title="Close translation panel"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div
@@ -238,26 +293,51 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
             className="absolute inset-0 pointer-events-none"
             style={{ width: pageSize.width, zIndex: 20 }}
           >
-            {translatedParagraphs.map((para, idx) => (
-              <div
-                key={`para-${idx}`}
-                style={{
-                  marginLeft: para.x,
-                  marginTop: para.marginTop,
-                  maxWidth: para.width,
-                  fontSize: para.fontSize,
-                  fontFamily: para.fontFamily,
-                  fontWeight: para.fontWeight,
-                  fontStyle: para.fontStyle,
-                  color: '#000',
-                  lineHeight: 1.4,
-                  whiteSpace: 'normal',
-                  wordWrap: 'break-word',
-                }}
-              >
-                {para.translatedText}
-              </div>
-            ))}
+            {isVisionMode ? (
+              visionBlocks.map((block, idx) => (
+                <div
+                  key={`vision-${idx}`}
+                  className="absolute"
+                  style={{
+                    left: `${block.x}%`,
+                    top: `${block.y}%`,
+                    width: `${block.width}%`,
+                    fontSize: block.fontSize,
+                    fontWeight: block.fontWeight,
+                    fontStyle: block.fontStyle,
+                    color: '#000',
+                    lineHeight: 1.4,
+                    whiteSpace: 'normal',
+                    wordWrap: 'break-word',
+                    backgroundColor: bgColor,
+                    padding: '2px 4px',
+                  }}
+                >
+                  {block.text}
+                </div>
+              ))
+            ) : (
+              translatedParagraphs.map((para, idx) => (
+                <div
+                  key={`para-${idx}`}
+                  style={{
+                    marginLeft: para.x,
+                    marginTop: para.marginTop,
+                    maxWidth: para.width,
+                    fontSize: para.fontSize,
+                    fontFamily: para.fontFamily,
+                    fontWeight: para.fontWeight,
+                    fontStyle: para.fontStyle,
+                    color: '#000',
+                    lineHeight: 1.4,
+                    whiteSpace: 'normal',
+                    wordWrap: 'break-word',
+                  }}
+                >
+                  {para.translatedText}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

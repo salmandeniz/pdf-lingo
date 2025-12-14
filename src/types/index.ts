@@ -33,6 +33,7 @@ export interface AppSettings {
   translationService: 'google' | 'openrouter'
   openRouterApiKey: string
   openRouterModel: string
+  visionModel: string
   targetLanguage: string
   theme: 'light' | 'dark' | 'system'
 }

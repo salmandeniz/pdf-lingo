@@ -43,7 +43,8 @@ interface AppState {
 const defaultSettings: AppSettings = {
   translationService: 'google',
   openRouterApiKey: '',
-  openRouterModel: 'openai/gpt-4o-mini',
+  openRouterModel: '',
+  visionModel: '',
   targetLanguage: 'tr',
   theme: 'system',
 }
