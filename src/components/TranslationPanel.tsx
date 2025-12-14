@@ -14,6 +14,7 @@ import type { Paragraph } from '../utils/textUtils'
 interface TranslationPanelProps {
   width: number
   height: number
+  onWidthChange?: (width: number) => void
 }
 
 interface TranslatedParagraph {
@@ -36,7 +37,7 @@ interface ParagraphMask {
   height: number
 }
 
-export function TranslationPanel({ width, height }: TranslationPanelProps) {
+export function TranslationPanel({ width, height, onWidthChange }: TranslationPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 })
   const [bgColor, setBgColor] = useState('rgb(255, 255, 255)')
@@ -45,6 +46,8 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
   const [visionBlocks, setVisionBlocks] = useState<VisionTranslatedBlock[]>([])
   const [isVisionMode, setIsVisionMode] = useState(false)
   const [isVisionProcessing, setIsVisionProcessing] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
   const {
     currentPage,
@@ -175,6 +178,40 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
     settings.openRouterModel,
   ])
 
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+    resizeRef.current = { startX: e.clientX, startWidth: width }
+  }
+
+  useEffect(() => {
+    const handleResizeMove = (e: MouseEvent) => {
+      if (!resizeRef.current || !onWidthChange) return
+      const delta = resizeRef.current.startX - e.clientX
+      const newWidth = Math.max(200, Math.min(window.innerWidth * 0.8, resizeRef.current.startWidth + delta))
+      onWidthChange(newWidth)
+    }
+
+    const handleResizeEnd = () => {
+      setIsResizing(false)
+      resizeRef.current = null
+    }
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleResizeMove)
+      document.addEventListener('mouseup', handleResizeEnd)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMove)
+      document.removeEventListener('mouseup', handleResizeEnd)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isResizing, onWidthChange])
+
   const handleVisionFix = async () => {
     if (!canvasRef.current || !settings.openRouterApiKey) {
       alert('OpenRouter API key is required for AI fix')
@@ -205,9 +242,13 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
 
   return (
     <div
-      className="bg-gray-800 border-l border-gray-700 flex flex-col"
+      className="bg-gray-800 border-l border-gray-700 flex flex-col relative"
       style={{ width, minWidth: width }}
     >
+      <div
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/50 z-50 transition-colors"
+        onMouseDown={handleResizeStart}
+      />
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700 bg-gray-850">
         <div className="flex items-center gap-2">
           <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -251,7 +292,7 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
       </div>
 
       <div
-        className="flex-1 overflow-auto bg-gray-900 flex justify-center p-4"
+        className="flex-1 overflow-auto bg-gray-900 flex justify-center py-4 pr-4 pl-2"
         style={{ height: height - 45 }}
       >
         <div className="relative" style={{ minWidth: pageSize.width || width, minHeight: pageSize.height || height - 45 }}>

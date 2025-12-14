@@ -15,6 +15,8 @@ export function PdfViewer() {
     currentPage,
     zoom,
     showTranslationPanel,
+    translationPanelWidth,
+    setTranslationPanelWidth,
   } = useAppStore()
 
   useEffect(() => {
@@ -62,7 +64,7 @@ export function PdfViewer() {
     <div className="flex-1 flex overflow-hidden">
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto bg-gray-900 flex justify-center p-8"
+        className={`flex-1 overflow-auto bg-gray-900 flex justify-center py-8 pl-8 ${showTranslationPanel ? 'pr-2' : 'pr-8'}`}
       >
         <div className="relative">
           {isLoading && (
@@ -88,8 +90,9 @@ export function PdfViewer() {
 
       {showTranslationPanel && canvasSize.width > 0 && (
         <TranslationPanel
-          width={canvasSize.width}
+          width={translationPanelWidth || canvasSize.width}
           height={canvasSize.height + 48}
+          onWidthChange={setTranslationPanelWidth}
         />
       )}
     </div>

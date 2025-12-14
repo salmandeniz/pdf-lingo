@@ -16,6 +16,8 @@ interface AppState {
   activeColor: string
   selectedAnnotationId: string | null
   showTranslationPanel: boolean
+  translationPanelPosition: 'left' | 'right'
+  translationPanelWidth: number | null
   pageTranslation: string
   isTranslating: boolean
   translatedItems: TranslatedTextItem[]
@@ -35,6 +37,7 @@ interface AppState {
   setActiveColor: (color: string) => void
   setSelectedAnnotationId: (id: string | null) => void
   setShowTranslationPanel: (show: boolean) => void
+  setTranslationPanelWidth: (width: number | null) => void
   setPageTranslation: (text: string) => void
   setIsTranslating: (translating: boolean) => void
   setTranslatedItems: (items: TranslatedTextItem[]) => void
@@ -65,6 +68,8 @@ export const useAppStore = create<AppState>()(
       activeColor: '#ffeb3b',
       selectedAnnotationId: null,
       showTranslationPanel: false,
+      translationPanelPosition: 'right',
+      translationPanelWidth: null,
       pageTranslation: '',
       isTranslating: false,
       translatedItems: [],
@@ -97,13 +102,14 @@ export const useAppStore = create<AppState>()(
       setActiveColor: (color) => set({ activeColor: color }),
       setSelectedAnnotationId: (id) => set({ selectedAnnotationId: id }),
       setShowTranslationPanel: (show) => set({ showTranslationPanel: show, pageTranslation: '', translatedItems: [] }),
+      setTranslationPanelWidth: (width) => set({ translationPanelWidth: width }),
       setPageTranslation: (text) => set({ pageTranslation: text }),
       setIsTranslating: (translating) => set({ isTranslating: translating }),
       setTranslatedItems: (items) => set({ translatedItems: items }),
     }),
     {
       name: 'pdf-reader-storage',
-      partialize: (state) => ({ settings: state.settings, annotations: state.annotations }),
+      partialize: (state) => ({ settings: state.settings, annotations: state.annotations, translationPanelWidth: state.translationPanelWidth }),
     }
   )
 )
