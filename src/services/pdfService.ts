@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist'
+import type { PositionedTextItem } from '../types'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -89,6 +90,52 @@ export class PdfService {
 
   getTotalPages(): number {
     return this.document?.numPages ?? 0
+  }
+
+  async getTextItemsWithPositions(
+    pageNumber: number,
+    scale: number
+  ): Promise<{
+    items: PositionedTextItem[]
+    pageWidth: number
+    pageHeight: number
+  }> {
+    const page = await this.getPage(pageNumber)
+    if (!page) {
+      return { items: [], pageWidth: 0, pageHeight: 0 }
+    }
+
+    const viewport = page.getViewport({ scale })
+    const textContent = await page.getTextContent()
+
+    const items: PositionedTextItem[] = []
+
+    for (const item of textContent.items) {
+      if (!('str' in item) || !('transform' in item)) continue
+      const textItem = item as { str: string; transform: number[]; width: number; fontName: string }
+      if (!textItem.str.trim()) continue
+
+      const tx = textItem.transform[4]
+      const ty = textItem.transform[5]
+      const fontSize = Math.abs(textItem.transform[0]) || Math.abs(textItem.transform[3]) || 12
+      const [x, y] = viewport.convertToViewportPoint(tx, ty)
+
+      items.push({
+        str: textItem.str,
+        x,
+        y: y - fontSize * scale,
+        width: textItem.width * scale,
+        height: fontSize * scale,
+        fontSize: fontSize * scale,
+        fontFamily: textItem.fontName || 'sans-serif',
+      })
+    }
+
+    return {
+      items,
+      pageWidth: viewport.width,
+      pageHeight: viewport.height,
+    }
   }
 
   destroy(): void {

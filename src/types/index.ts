@@ -36,3 +36,18 @@ export interface AppSettings {
   targetLanguage: string
   theme: 'light' | 'dark' | 'system'
 }
+
+export interface PositionedTextItem {
+  str: string
+  x: number
+  y: number
+  width: number
+  height: number
+  fontSize: number
+  fontFamily: string
+}
+
+export interface TranslatedTextItem extends PositionedTextItem {
+  translatedStr: string
+  scaleX: number
+}

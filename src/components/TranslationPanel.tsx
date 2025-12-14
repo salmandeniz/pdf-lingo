@@ -1,53 +1,167 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { pdfService } from '../services/pdfService'
 import { translate } from '../services/translationService'
+import {
+  getBackgroundColor,
+  groupIntoLines,
+  groupIntoParagraphs,
+  concurrentMap,
+} from '../utils/textUtils'
+import type { Paragraph } from '../utils/textUtils'
 
 interface TranslationPanelProps {
   width: number
   height: number
 }
 
+interface TranslatedParagraph {
+  translatedText: string
+  x: number
+  y: number
+  width: number
+  height: number
+  fontSize: number
+  marginTop: number
+}
+
+interface ParagraphMask {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export function TranslationPanel({ width, height }: TranslationPanelProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [pageSize, setPageSize] = useState({ width: 0, height: 0 })
+  const [bgColor, setBgColor] = useState('rgb(255, 255, 255)')
+  const [paragraphMasks, setParagraphMasks] = useState<ParagraphMask[]>([])
+  const [translatedParagraphs, setTranslatedParagraphs] = useState<TranslatedParagraph[]>([])
+
   const {
     currentPage,
+    zoom,
     showTranslationPanel,
-    pageTranslation,
     isTranslating,
     settings,
-    setPageTranslation,
     setIsTranslating,
     setShowTranslationPanel,
   } = useAppStore()
 
   useEffect(() => {
-    const translatePage = async () => {
-      if (!showTranslationPanel) return
+    const renderAndTranslate = async () => {
+      if (!showTranslationPanel || !canvasRef.current) return
 
       setIsTranslating(true)
-      setPageTranslation('')
+      setParagraphMasks([])
+      setTranslatedParagraphs([])
 
-      const text = await pdfService.getTextContent(currentPage)
-      if (!text.trim()) {
-        setPageTranslation('No text found on this page.')
+      try {
+        const pageInfo = await pdfService.renderPage(currentPage, canvasRef.current, zoom)
+        if (!pageInfo) {
+          setIsTranslating(false)
+          return
+        }
+
+        setPageSize({ width: pageInfo.width, height: pageInfo.height })
+
+        const detectedBgColor = getBackgroundColor(canvasRef.current)
+        setBgColor(detectedBgColor)
+
+        const { items } = await pdfService.getTextItemsWithPositions(currentPage, zoom)
+        if (items.length === 0) {
+          setIsTranslating(false)
+          return
+        }
+
+        const lines = groupIntoLines(items)
+        const paragraphs = groupIntoParagraphs(lines)
+
+        const padding = 6
+        const masks = paragraphs.map((p) => ({
+          x: p.x - padding,
+          y: p.y - padding,
+          width: pageInfo.width - p.x + padding,
+          height: p.height + padding * 2,
+        }))
+        setParagraphMasks(masks)
+
+        const results = await concurrentMap(
+          paragraphs,
+          3,
+          async (para: Paragraph) => {
+            if (!para.text.trim()) return null
+
+            try {
+              const result = await translate(
+                para.text,
+                settings.targetLanguage,
+                settings.translationService,
+                settings.openRouterApiKey,
+                settings.openRouterModel
+              )
+
+              return {
+                translatedText: result.translatedText,
+                x: para.x,
+                y: para.y,
+                width: pageInfo.width - para.x - 20,
+                height: para.height,
+                fontSize: para.fontSize,
+                marginTop: 0,
+              }
+            } catch (error) {
+              console.error('Translation failed for paragraph:', para.text.substring(0, 50), error)
+              return null
+            }
+          }
+        )
+
+        const validTranslations: TranslatedParagraph[] = []
+        let previousValidIndex = -1
+
+        results.forEach((res, index) => {
+          if (!res) return
+
+          const currentPara = paragraphs[index]
+          let marginTop = 0
+
+          if (previousValidIndex === -1) {
+            marginTop = currentPara.y
+          } else {
+            const prevPara = paragraphs[previousValidIndex]
+            const prevBottom = prevPara.y + prevPara.height
+            marginTop = currentPara.y - prevBottom
+            marginTop = Math.max(0, marginTop)
+          }
+
+          validTranslations.push({
+            ...res,
+            marginTop
+          })
+
+          previousValidIndex = index
+        })
+
+        setTranslatedParagraphs(validTranslations)
+      } catch (error) {
+        console.error('Error during rendering/translation:', error)
+      } finally {
         setIsTranslating(false)
-        return
       }
-
-      const result = await translate(
-        text,
-        settings.targetLanguage,
-        settings.translationService,
-        settings.openRouterApiKey,
-        settings.openRouterModel
-      )
-
-      setPageTranslation(result.translatedText)
-      setIsTranslating(false)
     }
 
-    translatePage()
-  }, [currentPage, showTranslationPanel, settings.targetLanguage, settings.translationService])
+    renderAndTranslate()
+  }, [
+    currentPage,
+    showTranslationPanel,
+    zoom,
+    settings.targetLanguage,
+    settings.translationService,
+    settings.openRouterApiKey,
+    settings.openRouterModel,
+  ])
 
   if (!showTranslationPanel) return null
 
@@ -76,19 +190,68 @@ export function TranslationPanel({ width, height }: TranslationPanelProps) {
       </div>
 
       <div
-        className="flex-1 overflow-auto p-6"
+        className="flex-1 overflow-auto bg-gray-900 flex justify-center p-4"
         style={{ height: height - 45 }}
       >
-        {isTranslating ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-400 text-sm">Translating page {currentPage}...</p>
+        <div className="relative" style={{ minWidth: pageSize.width || width, minHeight: pageSize.height || height - 45 }}>
+          <canvas
+            ref={canvasRef}
+            className="shadow-2xl"
+            style={{ maxWidth: '100%', height: 'auto' }}
+          />
+
+          {isTranslating && translatedParagraphs.length === 0 && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/70 z-30">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-gray-400 text-sm mt-4">Translating page {currentPage}...</p>
+            </div>
+          )}
+
+          {/* Masks Layer */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ width: pageSize.width, height: pageSize.height, zIndex: 10 }}
+          >
+            {paragraphMasks.map((mask, idx) => (
+              <div
+                key={`mask-${idx}`}
+                className="absolute"
+                style={{
+                  left: mask.x,
+                  top: mask.y,
+                  width: mask.width,
+                  height: mask.height,
+                  backgroundColor: bgColor,
+                }}
+              />
+            ))}
           </div>
-        ) : (
-          <div className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
-            {pageTranslation || 'No translation available.'}
+
+          {/* Translated Paragraphs Layer */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ width: pageSize.width, zIndex: 20 }}
+          >
+            {translatedParagraphs.map((para, idx) => (
+              <div
+                key={`para-${idx}`}
+                style={{
+                  marginLeft: para.x,
+                  marginTop: para.marginTop,
+                  maxWidth: para.width,
+                  fontSize: para.fontSize,
+                  fontFamily: 'sans-serif',
+                  color: '#000',
+                  lineHeight: 1.4,
+                  whiteSpace: 'normal',
+                  wordWrap: 'break-word',
+                }}
+              >
+                {para.translatedText}
+              </div>
+            ))}
           </div>
-        )}
+        </div>
       </div>
     </div>
   )

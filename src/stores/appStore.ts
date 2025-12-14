@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { PdfDocument, Annotation, AppSettings, AnnotationTool } from '../types'
+import type { PdfDocument, Annotation, AppSettings, AnnotationTool, TranslatedTextItem } from '../types'
 
 interface AppState {
   currentDocument: PdfDocument | null
@@ -18,6 +18,7 @@ interface AppState {
   showTranslationPanel: boolean
   pageTranslation: string
   isTranslating: boolean
+  translatedItems: TranslatedTextItem[]
 
   setCurrentDocument: (doc: PdfDocument | null) => void
   setCurrentPage: (page: number) => void
@@ -36,6 +37,7 @@ interface AppState {
   setShowTranslationPanel: (show: boolean) => void
   setPageTranslation: (text: string) => void
   setIsTranslating: (translating: boolean) => void
+  setTranslatedItems: (items: TranslatedTextItem[]) => void
 }
 
 const defaultSettings: AppSettings = {
@@ -64,9 +66,10 @@ export const useAppStore = create<AppState>()(
       showTranslationPanel: false,
       pageTranslation: '',
       isTranslating: false,
+      translatedItems: [],
 
-      setCurrentDocument: (doc) => set({ currentDocument: doc, currentPage: 1, annotations: [], pageTranslation: '' }),
-      setCurrentPage: (page) => set({ currentPage: page, pageTranslation: '' }),
+      setCurrentDocument: (doc) => set({ currentDocument: doc, currentPage: 1, annotations: [], pageTranslation: '', translatedItems: [] }),
+      setCurrentPage: (page) => set({ currentPage: page, pageTranslation: '', translatedItems: [] }),
       setZoom: (zoom) => set({ zoom: Math.max(0.25, Math.min(3, zoom)) }),
       addAnnotation: (annotation) =>
         set((state) => ({ annotations: [...state.annotations, annotation] })),
@@ -92,9 +95,10 @@ export const useAppStore = create<AppState>()(
       setActiveTool: (tool) => set({ activeTool: tool, selectedAnnotationId: null }),
       setActiveColor: (color) => set({ activeColor: color }),
       setSelectedAnnotationId: (id) => set({ selectedAnnotationId: id }),
-      setShowTranslationPanel: (show) => set({ showTranslationPanel: show, pageTranslation: '' }),
+      setShowTranslationPanel: (show) => set({ showTranslationPanel: show, pageTranslation: '', translatedItems: [] }),
       setPageTranslation: (text) => set({ pageTranslation: text }),
       setIsTranslating: (translating) => set({ isTranslating: translating }),
+      setTranslatedItems: (items) => set({ translatedItems: items }),
     }),
     {
       name: 'pdf-reader-storage',
