@@ -106,7 +106,7 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
           3,
           async (para: Paragraph) => {
             if (!para.text.trim()) return null
-            console.log('Translating paragraph:', para.text)
+            
             try {
               const result = await translate(
                 para.text,
@@ -137,29 +137,52 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
         )
 
         const validTranslations: TranslatedParagraph[] = []
-        let previousValidIndex = -1
-
+        
         results.forEach((res, index) => {
           if (!res) return
 
           const currentPara = paragraphs[index]
+          
+          // Calculate improved marginTop based on paragraph positioning
           let marginTop = 0
-
-          if (previousValidIndex === -1) {
+          
+          if (index === 0) {
+            // First paragraph starts at the original Y position
             marginTop = currentPara.y
           } else {
-            const prevPara = paragraphs[previousValidIndex]
+            // For subsequent paragraphs, calculate spacing based on previous paragraph
+            const prevPara = paragraphs[index - 1]
             const prevBottom = prevPara.y + prevPara.height
-            marginTop = currentPara.y - prevBottom
-            marginTop = Math.max(0, marginTop)
+            const gap = currentPara.y - prevBottom
+            
+            // Use the actual gap but cap it to avoid excessive spacing
+            marginTop = Math.max(0, Math.min(gap, currentPara.fontSize * 0.5))
           }
+
+          // Add logging to check line height values
+          console.log(`Paragraph ${index}:`, {
+            text: currentPara.text.substring(0, 50) + '...',
+            fontSize: currentPara.fontSize,
+            lineHeight: res.lineHeight,
+            lines: currentPara.lines.length,
+            isNumberedList: /^\s*\d+[\.\)]\s+/.test(currentPara.text),
+            marginTop,
+            calculatedGap: index > 0 ? currentPara.y - (paragraphs[index - 1].y + paragraphs[index - 1].height) : 0
+          })
 
           validTranslations.push({
             ...res,
             marginTop
           })
+        })
 
-          previousValidIndex = index
+        // Summary logging for line height analysis
+        console.log('Line Height Analysis:', {
+          totalParagraphs: validTranslations.length,
+          lineHeights: validTranslations.map(p => p.lineHeight),
+          averageLineHeight: validTranslations.reduce((sum, p) => sum + p.lineHeight, 0) / validTranslations.length,
+          minLineHeight: Math.min(...validTranslations.map(p => p.lineHeight)),
+          maxLineHeight: Math.max(...validTranslations.map(p => p.lineHeight))
         })
 
         setTranslatedParagraphs(validTranslations)
@@ -338,28 +361,38 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
             style={{ width: pageSize.width, zIndex: 20 }}
           >
             {isVisionMode ? (
-              visionBlocks.map((block, idx) => (
-                <div
-                  key={`vision-${idx}`}
-                  className="absolute"
-                  style={{
-                    left: `${block.x}%`,
-                    top: `${block.y}%`,
-                    width: `${block.width}%`,
-                    fontSize: block.fontSize,
-                    fontWeight: block.fontWeight,
-                    fontStyle: block.fontStyle,
-                    color: '#000',
-                    lineHeight: 1.4,
-                    whiteSpace: 'normal',
-                    wordWrap: 'break-word',
-                    backgroundColor: bgColor,
-                    padding: '2px 4px',
-                  }}
-                >
-                  {block.text}
-                </div>
-              ))
+              visionBlocks.map((block, idx) => {
+                // Use consistent line height calculation for vision mode (same as regular mode)
+                const isNumberedList = /^\s*\d+[\.\)]\s+/.test(block.text)
+                let consistentLineHeight
+                if (isNumberedList) {
+                  consistentLineHeight = 1.0 // Single spacing for numbered lists
+                } else {
+                  consistentLineHeight = 1.05 // Slightly more than single spacing for regular paragraphs
+                }
+                return (
+                  <div
+                    key={`vision-${idx}`}
+                    className="absolute"
+                    style={{
+                      left: `${block.x}%`,
+                      top: `${block.y}%`,
+                      width: `${block.width}%`,
+                      fontSize: block.fontSize,
+                      fontWeight: block.fontWeight,
+                      fontStyle: block.fontStyle,
+                      color: '#000',
+                      lineHeight: consistentLineHeight,
+                      whiteSpace: 'normal',
+                      wordWrap: 'break-word',
+                      backgroundColor: bgColor,
+                      padding: '2px 4px',
+                    }}
+                  >
+                    {block.text}
+                  </div>
+                )
+              })
             ) : (
               translatedParagraphs.map((para, idx) => (
                 <div

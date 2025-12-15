@@ -65,29 +65,10 @@ export interface Paragraph {
     fontStyle: 'normal' | 'italic'
 }
 
-export function calculateLineHeight(paragraph: Paragraph): number {
-    if (paragraph.lines.length <= 1) {
-        return 1
-    }
-
-    const lineHeights: number[] = []
-    
-    for (let i = 0; i < paragraph.lines.length - 1; i++) {
-        const currentLine = paragraph.lines[i]
-        const nextLine = paragraph.lines[i + 1]
-        
-        const currentMaxY = Math.max(...currentLine.map(item => item.y + item.height))
-        const nextMinY = Math.min(...nextLine.map(item => item.y))
-        
-        const gap = nextMinY - currentMaxY
-        const avgFontSize = (paragraph.fontSize || 16)
-        
-        lineHeights.push((gap + avgFontSize) / avgFontSize)
-    }
-    
-    const avgLineHeight = lineHeights.reduce((sum, height) => sum + height, 0) / lineHeights.length
-    
-    return Math.max(1.2, Math.min(2.0, avgLineHeight))
+export function calculateLineHeight(_paragraph: Paragraph): number {
+    // Use a consistent line height for all paragraph types
+    // This ensures uniform spacing between paragraphs
+    return 1.2
 }
 
 function getLineNumber(text: string): number | null {
@@ -125,7 +106,6 @@ export function groupIntoParagraphs(lines: PositionedTextItem[][]): Paragraph[] 
         const prevHeight = Math.max(...prevLine.map(item => item.height))
         const prevBottom = prevY + prevHeight
         const prevX = Math.min(...prevLine.map(item => item.x))
-        const prevText = prevLine.map(item => item.str).join(' ').trim()
 
         // Calculate current line metrics
         const currY = Math.min(...currLine.map(item => item.y))

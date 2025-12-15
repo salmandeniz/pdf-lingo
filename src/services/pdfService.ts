@@ -41,11 +41,19 @@ export class PdfService {
     canvas.height = viewport.height
     canvas.width = viewport.width
 
-    await page.render({
+    // Clear any ongoing render operations
+    const renderTask = page.render({
       canvasContext: context,
       viewport,
       canvas,
-    }).promise
+    })
+
+    try {
+      await renderTask.promise
+    } catch (error) {
+      console.error('Canvas render error:', error)
+      throw error
+    }
 
     return {
       pageNumber,
