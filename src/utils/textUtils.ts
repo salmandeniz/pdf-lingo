@@ -65,34 +65,113 @@ export interface Paragraph {
     fontStyle: 'normal' | 'italic'
 }
 
+export function calculateLineHeight(paragraph: Paragraph): number {
+    if (paragraph.lines.length <= 1) {
+        return 1
+    }
+
+    const lineHeights: number[] = []
+    
+    for (let i = 0; i < paragraph.lines.length - 1; i++) {
+        const currentLine = paragraph.lines[i]
+        const nextLine = paragraph.lines[i + 1]
+        
+        const currentMaxY = Math.max(...currentLine.map(item => item.y + item.height))
+        const nextMinY = Math.min(...nextLine.map(item => item.y))
+        
+        const gap = nextMinY - currentMaxY
+        const avgFontSize = (paragraph.fontSize || 16)
+        
+        lineHeights.push((gap + avgFontSize) / avgFontSize)
+    }
+    
+    const avgLineHeight = lineHeights.reduce((sum, height) => sum + height, 0) / lineHeights.length
+    
+    return Math.max(1.2, Math.min(2.0, avgLineHeight))
+}
+
+function getLineNumber(text: string): number | null {
+    // Extract the number from patterns like "6. ", "10. ", etc.
+    const match = text.match(/^\s*(\d+)[\.\)]\s+/)
+    return match ? parseInt(match[1], 10) : null
+}
+
+function isNumberedListItem(text: string): boolean {
+    // Match patterns like "1. ", "2. ", "10. ", "1) ", "2) ", etc.
+    const numberedPattern = /^\s*\d+[\.\)]\s+/
+    return numberedPattern.test(text)
+}
+
+function isSectionHeader(text: string): boolean {
+    // Heuristic: short lines that are likely section headers (under 40 chars and no period at end)
+    return text.length < 40 && !text.includes('.') && text.trim().length > 0
+}
+
 export function groupIntoParagraphs(lines: PositionedTextItem[][]): Paragraph[] {
     if (lines.length === 0) return []
 
     const paragraphs: Paragraph[] = []
     let currentParagraphLines: PositionedTextItem[][] = [lines[0]]
+    
+    // Track the current numbered item being processed
+    let currentNumberedItem: number | null = getLineNumber(lines[0].map(item => item.str).join(' ').trim())
 
     for (let i = 1; i < lines.length; i++) {
         const prevLine = lines[i - 1]
         const currLine = lines[i]
 
+        // Calculate previous line metrics
         const prevY = Math.min(...prevLine.map(item => item.y))
         const prevHeight = Math.max(...prevLine.map(item => item.height))
         const prevBottom = prevY + prevHeight
+        const prevX = Math.min(...prevLine.map(item => item.x))
+        const prevText = prevLine.map(item => item.str).join(' ').trim()
 
+        // Calculate current line metrics
         const currY = Math.min(...currLine.map(item => item.y))
         const currFontSize = currLine.reduce((sum, item) => sum + item.fontSize, 0) / currLine.length
+        const currX = Math.min(...currLine.map(item => item.x))
+        const currText = currLine.map(item => item.str).join(' ').trim()
 
+        // Calculate gap and thresholds
         const gap = currY - prevBottom
         const paragraphGapThreshold = currFontSize * 0.8
-
-        const prevX = Math.min(...prevLine.map(item => item.x))
-        const currX = Math.min(...currLine.map(item => item.x))
         const xDiff = Math.abs(currX - prevX)
         const isNewIndent = xDiff > currFontSize * 2
+        
+        // Check for numbered list items and section headers
+        const isCurrNumbered = isNumberedListItem(currText)
+        const currNumber = getLineNumber(currText)
+        const isCurrSectionHeader = isSectionHeader(currText)
 
-        if (gap > paragraphGapThreshold || isNewIndent) {
+        // Enhanced decision logic with numbered item state tracking
+        let shouldStartNewParagraph = false
+
+        if (gap > paragraphGapThreshold) {
+            shouldStartNewParagraph = true
+        } else if (isCurrSectionHeader) {
+            shouldStartNewParagraph = true
+        } else if (isCurrNumbered && currNumber !== currentNumberedItem) {
+            shouldStartNewParagraph = true
+        } else if (isNewIndent) {
+            shouldStartNewParagraph = true
+        }
+
+        // Update current numbered item state
+        if (isCurrNumbered) {
+            currentNumberedItem = currNumber
+        }
+
+        if (shouldStartNewParagraph) {
             paragraphs.push(buildParagraph(currentParagraphLines))
             currentParagraphLines = [currLine]
+            
+            // Reset state for new paragraph
+            if (isCurrNumbered) {
+                currentNumberedItem = currNumber
+            } else {
+                currentNumberedItem = null
+            }
         } else {
             currentParagraphLines.push(currLine)
         }
@@ -101,7 +180,7 @@ export function groupIntoParagraphs(lines: PositionedTextItem[][]): Paragraph[] 
     if (currentParagraphLines.length > 0) {
         paragraphs.push(buildParagraph(currentParagraphLines))
     }
-
+    
     return paragraphs
 }
 

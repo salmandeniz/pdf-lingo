@@ -8,6 +8,7 @@ import {
   groupIntoLines,
   groupIntoParagraphs,
   concurrentMap,
+  calculateLineHeight,
 } from '../utils/textUtils'
 import type { Paragraph } from '../utils/textUtils'
 
@@ -28,6 +29,7 @@ interface TranslatedParagraph {
   fontWeight: 'normal' | 'bold'
   fontStyle: 'normal' | 'italic'
   marginTop: number
+  lineHeight: number
 }
 
 interface ParagraphMask {
@@ -104,7 +106,7 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
           3,
           async (para: Paragraph) => {
             if (!para.text.trim()) return null
-
+            console.log('Translating paragraph:', para.text)
             try {
               const result = await translate(
                 para.text,
@@ -125,6 +127,7 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
                 fontWeight: para.fontWeight,
                 fontStyle: para.fontStyle,
                 marginTop: 0,
+                lineHeight: calculateLineHeight(para),
               }
             } catch (error) {
               console.error('Translation failed for paragraph:', para.text.substring(0, 50), error)
@@ -370,7 +373,7 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
                     fontWeight: para.fontWeight,
                     fontStyle: para.fontStyle,
                     color: '#000',
-                    lineHeight: 1.4,
+                    lineHeight: para.lineHeight,
                     whiteSpace: 'normal',
                     wordWrap: 'break-word',
                   }}

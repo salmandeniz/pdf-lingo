@@ -30,4 +30,13 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  // 4. Enable source maps for debugging
+  build: {
+    sourcemap: true,
+  },
+  // 5. Enable source maps in development mode for debugging
+  define: {
+    // Enable source maps for debugging
+    __VUE_PROD_DEVTOOLS__: true,
+  },
 }));
