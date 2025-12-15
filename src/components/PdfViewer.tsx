@@ -3,6 +3,7 @@ import { useAppStore } from '../stores/appStore'
 import { pdfService } from '../services/pdfService'
 import { AnnotationLayer } from './AnnotationLayer'
 import { TranslationPanel } from './TranslationPanel'
+import { TtsHighlight } from './TtsHighlight'
 
 export function PdfViewer() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -17,6 +18,9 @@ export function PdfViewer() {
     showTranslationPanel,
     translationPanelWidth,
     setTranslationPanelWidth,
+    isTtsPlaying,
+    currentTtsParagraphIndex,
+    ttsParagraphs,
   } = useAppStore()
 
   useEffect(() => {
@@ -84,6 +88,10 @@ export function PdfViewer() {
               height={canvasSize.height}
               pageNumber={currentPage}
             />
+          )}
+
+          {isTtsPlaying && currentTtsParagraphIndex >= 0 && ttsParagraphs[currentTtsParagraphIndex] && (
+            <TtsHighlight paragraph={ttsParagraphs[currentTtsParagraphIndex]} />
           )}
         </div>
       </div>
