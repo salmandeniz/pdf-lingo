@@ -10,6 +10,7 @@ import {
   concurrentMap,
   calculateLineHeight,
 } from '../utils/textUtils'
+import { checkTextBoldStatus } from '../utils/boldTest'
 import type { Paragraph } from '../utils/textUtils'
 
 interface TranslationPanelProps {
@@ -163,16 +164,20 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
             marginTop = Math.max(0, Math.min(gap, maxGap))
           }
 
-          // Add logging to check line height values
+          // Add logging to check line height values and font formatting
           console.log(`Paragraph ${index}:`, {
             text: currentPara.text,
             fontSize: currentPara.fontSize,
             lineHeight: res.lineHeight,
             lines: currentPara.lines.length,
+            fontWeight: currentPara.fontWeight,
+            fontStyle: currentPara.fontStyle,
+            fontFamily: currentPara.fontFamily,
             isNumberedList: /^\s*\d+[\.\)]\s+/.test(currentPara.text),
             isList: currentPara.isList,
             marginTop,
-            calculatedGap: index > 0 ? currentPara.y - (paragraphs[index - 1].y + paragraphs[index - 1].height) : 0
+            calculatedGap: index > 0 ? currentPara.y - (paragraphs[index - 1].y + paragraphs[index - 1].height) : 0,
+            isBoldDetected: currentPara.fontWeight === 'bold'
           })
 
           validTranslations.push({
@@ -189,6 +194,18 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
           minLineHeight: Math.min(...validTranslations.map(p => p.lineHeight)),
           maxLineHeight: Math.max(...validTranslations.map(p => p.lineHeight)),
           listCount: validTranslations.filter(p => p.isList).length
+        })
+
+        // Test specifically for "Reassurances for Parents" bold detection
+        const reassuranceTest = checkTextBoldStatus(items, "Reassurances for Parents")
+        console.log('[BOLD TEST] "Reassurances for Parents":', {
+          isBoldDetected: reassuranceTest.isBold,
+          confidence: reassuranceTest.confidence,
+          fontName: reassuranceTest.fontName,
+          detectedWeight: reassuranceTest.detectedWeight,
+          method: reassuranceTest.method,
+          totalTextItems: items.length,
+          matchingItems: items.filter(item => item.str.toLowerCase().includes('reassurances for parents')).length
         })
 
         setTranslatedParagraphs(validTranslations)

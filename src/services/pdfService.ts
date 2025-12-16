@@ -154,8 +154,69 @@ export class PdfService {
       const fontStyle = styles[textItem.fontName]
       const fontFamilyFromStyle = fontStyle?.fontFamily || ''
       const fontNameLower = (fontFamilyFromStyle || textItem.fontName || '').toLowerCase()
-      const isBold = fontNameLower.includes('bold') || fontNameLower.includes('black') || fontNameLower.includes('heavy')
-      const isItalic = fontNameLower.includes('italic') || fontNameLower.includes('oblique')
+      
+      // Enhanced bold detection - check multiple sources
+      let isBold = fontNameLower.includes('bold') || fontNameLower.includes('black') || fontNameLower.includes('heavy')
+      let isItalic = fontNameLower.includes('italic') || fontNameLower.includes('oblique')
+
+      // Additional detection for embedded fonts and generic names
+      // Many PDFs use font names like "g_d0_f1", "FontFile2", etc.
+      if (!isBold && !isItalic) {
+        // Check font weight/style hints in the font name itself
+        const fontNameParts = textItem.fontName.toLowerCase().split(/[-_]/)
+        isBold = fontNameParts.some(part =>
+          ['bold', 'black', 'heavy', 'thick', 'b'].includes(part)
+        )
+        isItalic = fontNameParts.some(part =>
+          ['italic', 'oblique', 'slant', 'i'].includes(part)
+        )
+        
+        // Fallback for generic font names: analyze context and patterns
+        if (!isBold && !isItalic) {
+          const genericFontPattern = /^g_d\d+_f\d+$/.test(textItem.fontName.toLowerCase())
+          if (genericFontPattern) {
+            // For generic fonts, we might need to analyze the text content and positioning
+            // This is a heuristic - short headers often use bold fonts
+            const text = textItem.str.trim()
+            const isShortHeader = text.length < 50 && !text.includes('.')
+            const isAllCaps = text === text.toUpperCase() && text.length > 3
+            const hasHeaderKeywords = /\b(Chapter|Section|Introduction|Conclusion|Tips|Guide|Safety|Understanding)\b/i.test(text)
+            
+            if (isShortHeader || isAllCaps || hasHeaderKeywords) {
+              isBold = true // Assume bold for likely headers
+            }
+          }
+        }
+      }
+
+      // Debug logging for font detection (only for "Reassurances for Parents" text)
+      if (textItem.str.includes('Reassurances for Parents')) {
+        const text = textItem.str.trim()
+        const isShortHeader = text.length < 50 && !text.includes('.')
+        const isAllCaps = text === text.toUpperCase() && text.length > 3
+        const hasHeaderKeywords = /\b(Chapter|Section|Introduction|Conclusion|Tips|Guide|Safety|Understanding)\b/i.test(text)
+        const genericFontPattern = /^g_d\d+_f\d+$/.test(textItem.fontName.toLowerCase())
+        
+        console.log(`[PDF Font Detection] Text: "${textItem.str}"`, {
+          fontName: textItem.fontName,
+          fontFamilyFromStyle,
+          fontNameLower,
+          isBold,
+          isItalic,
+          fontSize,
+          fullFontName: `${fontFamilyFromStyle || textItem.fontName}`,
+          fontNameParts: textItem.fontName.toLowerCase().split(/[-_]/),
+          enhancedDetectionApplied: !fontNameLower.includes('bold') && !fontNameLower.includes('italic'),
+          heuristicAnalysis: {
+            genericFontPattern,
+            isShortHeader,
+            isAllCaps,
+            hasHeaderKeywords,
+            textLength: text.length,
+            containsPeriod: text.includes('.')
+          }
+        })
+      }
 
       items.push({
         str: textItem.str,
