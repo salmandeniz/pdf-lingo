@@ -155,8 +155,10 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
             const prevBottom = prevPara.y + prevPara.height
             const gap = currentPara.y - prevBottom
             
-            // Use the actual gap but cap it to avoid excessive spacing
-            marginTop = Math.max(0, Math.min(gap, currentPara.fontSize * 0.5))
+            // Preserve more of the original spacing, especially for paragraph breaks
+            // Use a more generous cap for larger gaps that represent meaningful breaks
+            const maxGap = gap > currentPara.fontSize ? currentPara.fontSize * 1.5 : currentPara.fontSize * 0.5
+            marginTop = Math.max(0, Math.min(gap, maxGap))
           }
 
           // Add logging to check line height values

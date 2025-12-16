@@ -29,7 +29,8 @@ export class PdfService {
   async renderPage(
     pageNumber: number,
     canvas: HTMLCanvasElement,
-    scale: number
+    scale: number,
+    maxRetries: number = 3
   ): Promise<PdfPageInfo | null> {
     const page = await this.getPage(pageNumber)
     if (!page) return null
@@ -38,28 +39,49 @@ export class PdfService {
     const context = canvas.getContext('2d')
     if (!context) return null
 
-    canvas.height = viewport.height
-    canvas.width = viewport.width
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Set canvas dimensions
+        canvas.height = viewport.height
+        canvas.width = viewport.width
 
-    // Clear any ongoing render operations
-    const renderTask = page.render({
-      canvasContext: context,
-      viewport,
-      canvas,
-    })
+        // Clear canvas before rendering
+        context.clearRect(0, 0, canvas.width, canvas.height)
 
-    try {
-      await renderTask.promise
-    } catch (error) {
-      console.error('Canvas render error:', error)
-      throw error
+        // Create render task
+        const renderTask = page.render({
+          canvasContext: context,
+          viewport,
+          canvas,
+        })
+
+        // Wait for render to complete
+        await renderTask.promise
+        return {
+          pageNumber,
+          width: viewport.width,
+          height: viewport.height,
+        }
+
+      } catch (error) {
+        // Handle rendering cancellation by retrying
+        if (error && typeof error === 'object' && 'name' in error && error.name === 'RenderingCancelledException') {
+          console.log(`Render attempt ${attempt + 1} cancelled, retrying...`)
+          if (attempt === maxRetries - 1) {
+            console.warn('Max retries reached for render cancellation')
+            return null
+          }
+          // Wait a bit before retrying
+          await new Promise(resolve => setTimeout(resolve, 100))
+          continue
+        } else {
+          console.error('Canvas render error:', error)
+          throw error
+        }
+      }
     }
 
-    return {
-      pageNumber,
-      width: viewport.width,
-      height: viewport.height,
-    }
+    return null
   }
 
   async getTextContent(pageNumber: number): Promise<string> {
