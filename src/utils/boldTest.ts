@@ -70,7 +70,7 @@ export function testBoldFromFontInfo(items: PositionedTextItem[]): BoldTestResul
  * This is a more advanced test that could be implemented with canvas rendering
  */
 export function testBoldVisually(
-  canvas: HTMLCanvasElement,
+  _canvas: HTMLCanvasElement,
   textItems: PositionedTextItem[]
 ): BoldTestResult {
   // This would require more complex canvas-based font rendering comparison
