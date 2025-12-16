@@ -30,6 +30,7 @@ interface TranslatedParagraph {
   fontStyle: 'normal' | 'italic'
   marginTop: number
   lineHeight: number
+  isList: boolean
 }
 
 interface ParagraphMask {
@@ -128,6 +129,7 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
                 fontStyle: para.fontStyle,
                 marginTop: 0,
                 lineHeight: calculateLineHeight(para),
+                isList: para.isList,
               }
             } catch (error) {
               console.error('Translation failed for paragraph:', para.text.substring(0, 50), error)
@@ -163,11 +165,12 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
 
           // Add logging to check line height values
           console.log(`Paragraph ${index}:`, {
-            text: currentPara.text.substring(0, 50) + '...',
+            text: currentPara.text,
             fontSize: currentPara.fontSize,
             lineHeight: res.lineHeight,
             lines: currentPara.lines.length,
             isNumberedList: /^\s*\d+[\.\)]\s+/.test(currentPara.text),
+            isList: currentPara.isList,
             marginTop,
             calculatedGap: index > 0 ? currentPara.y - (paragraphs[index - 1].y + paragraphs[index - 1].height) : 0
           })
@@ -184,7 +187,8 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
           lineHeights: validTranslations.map(p => p.lineHeight),
           averageLineHeight: validTranslations.reduce((sum, p) => sum + p.lineHeight, 0) / validTranslations.length,
           minLineHeight: Math.min(...validTranslations.map(p => p.lineHeight)),
-          maxLineHeight: Math.max(...validTranslations.map(p => p.lineHeight))
+          maxLineHeight: Math.max(...validTranslations.map(p => p.lineHeight)),
+          listCount: validTranslations.filter(p => p.isList).length
         })
 
         setTranslatedParagraphs(validTranslations)
@@ -409,7 +413,7 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
                     fontStyle: para.fontStyle,
                     color: '#000',
                     lineHeight: para.lineHeight,
-                    whiteSpace: 'normal',
+                    whiteSpace: para.isList ? 'pre-line' : 'normal',
                     wordWrap: 'break-word',
                   }}
                 >

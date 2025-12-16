@@ -63,6 +63,7 @@ export interface Paragraph {
     fontFamily: string
     fontWeight: 'normal' | 'bold'
     fontStyle: 'normal' | 'italic'
+    isList: boolean
 }
 
 export function calculateLineHeight(_paragraph: Paragraph): number {
@@ -81,6 +82,30 @@ function isNumberedListItem(text: string): boolean {
     // Match patterns like "1. ", "2. ", "10. ", "1) ", "2) ", etc.
     const numberedPattern = /^\s*\d+[\.\)]\s+/
     return numberedPattern.test(text)
+}
+
+function isBulletPoint(text: string): boolean {
+    // Match bullet points like "• ", "◦ ", "▪ ", "- ", "* ", etc.
+    const bulletPattern = /^\s*([•◦▪\-*·▪◊])\s+/
+    return bulletPattern.test(text)
+}
+
+function isListParagraph(lines: PositionedTextItem[][]): boolean {
+    // Check if most lines in the paragraph are list items
+    if (lines.length < 2) return false
+    
+    let listItemCount = 0
+    let totalLines = lines.length
+    
+    for (const line of lines) {
+        const lineText = line.map(item => item.str).join(' ').trim()
+        if (isNumberedListItem(lineText) || isBulletPoint(lineText)) {
+            listItemCount++
+        }
+    }
+    
+    // Consider it a list if at least 60% of lines are list items
+    return (listItemCount / totalLines) >= 0.6
 }
 
 function isSectionHeader(text: string): boolean {
@@ -166,9 +191,18 @@ export function groupIntoParagraphs(lines: PositionedTextItem[][]): Paragraph[] 
 
 function buildParagraph(lines: PositionedTextItem[][]): Paragraph {
     const allItems = lines.flat()
-    const text = lines
-        .map(line => line.sort((a, b) => a.x - b.x).map(item => item.str).join(' '))
-        .join(' ')
+    
+    // Detect if this paragraph is a list
+    const isList = isListParagraph(lines)
+    
+    // For lists, preserve line breaks; for regular paragraphs, join with spaces
+    const text = isList 
+        ? lines
+            .map(line => line.sort((a, b) => a.x - b.x).map(item => item.str).join(' '))
+            .join('\n')
+        : lines
+            .map(line => line.sort((a, b) => a.x - b.x).map(item => item.str).join(' '))
+            .join(' ')
 
     const x = Math.min(...allItems.map(item => item.x))
     const y = Math.min(...allItems.map(item => item.y))
@@ -200,6 +234,7 @@ function buildParagraph(lines: PositionedTextItem[][]): Paragraph {
         fontFamily,
         fontWeight,
         fontStyle,
+        isList,
     }
 }
 
