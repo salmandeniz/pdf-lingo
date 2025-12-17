@@ -112,6 +112,18 @@ export function groupIntoLines(items: PositionedTextItem[]): PositionedTextItem[
     return lines
 }
 
+export interface ParagraphCell {
+    text: string
+    x: number
+    y: number
+    width: number
+    height: number
+    fontSize: number
+    fontFamily: string
+    fontWeight: 'normal' | 'bold'
+    fontStyle: 'normal' | 'italic'
+}
+
 export interface Paragraph {
     lines: PositionedTextItem[][]
     text: string
@@ -124,6 +136,8 @@ export interface Paragraph {
     fontWeight: 'normal' | 'bold'
     fontStyle: 'normal' | 'italic'
     isList: boolean
+    isTableRow: boolean
+    cells?: ParagraphCell[]
 }
 
 export function calculateLineHeight(_paragraph: Paragraph): number {
@@ -249,6 +263,55 @@ export function groupIntoParagraphs(lines: PositionedTextItem[][]): Paragraph[] 
     return paragraphs
 }
 
+function extractCellsFromLine(lineItems: PositionedTextItem[]): ParagraphCell[] | null {
+    const columns = detectTableColumns(lineItems)
+    const sorted = [...lineItems].sort((a, b) => a.x - b.x)
+
+    if (!columns || columns.length === 0) {
+        return null
+    }
+
+    const columnBoundaries = [0, ...columns, Infinity]
+    const cells: ParagraphCell[] = []
+
+    for (let i = 0; i < columnBoundaries.length - 1; i++) {
+        const start = columnBoundaries[i]
+        const end = columnBoundaries[i + 1]
+        const cellItems = sorted.filter(item => item.x >= start && item.x < end)
+        if (cellItems.length > 0) {
+            const cellX = Math.min(...cellItems.map(item => item.x))
+            const cellY = Math.min(...cellItems.map(item => item.y))
+            const cellMaxX = Math.max(...cellItems.map(item => item.x + item.width))
+            const cellMaxY = Math.max(...cellItems.map(item => item.y + item.height))
+            const avgFontSize = cellItems.reduce((sum, item) => sum + item.fontSize, 0) / cellItems.length
+
+            const fontCounts = new Map<string, number>()
+            cellItems.forEach(item => {
+                const count = fontCounts.get(item.fontFamily) || 0
+                fontCounts.set(item.fontFamily, count + 1)
+            })
+            const fontFamily = [...fontCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'serif'
+
+            const boldCount = cellItems.filter(item => item.fontWeight === 'bold').length
+            const italicCount = cellItems.filter(item => item.fontStyle === 'italic').length
+
+            cells.push({
+                text: cellItems.map(item => item.str).join(' '),
+                x: cellX,
+                y: cellY,
+                width: cellMaxX - cellX,
+                height: cellMaxY - cellY,
+                fontSize: avgFontSize,
+                fontFamily,
+                fontWeight: boldCount > cellItems.length / 2 ? 'bold' : 'normal',
+                fontStyle: italicCount > cellItems.length / 2 ? 'italic' : 'normal',
+            })
+        }
+    }
+
+    return cells.length > 0 ? cells : null
+}
+
 function formatLineWithColumns(lineItems: PositionedTextItem[]): string {
     const columns = detectTableColumns(lineItems)
     const sorted = [...lineItems].sort((a, b) => a.x - b.x)
@@ -277,13 +340,18 @@ function buildParagraph(lines: PositionedTextItem[][]): Paragraph {
 
     const isList = isListParagraph(lines)
 
-    const text = isList
-        ? lines
-            .map(line => formatLineWithColumns(line))
-            .join('\n')
-        : lines
-            .map(line => formatLineWithColumns(line))
-            .join(' ')
+    const formattedLines = lines.map(line => formatLineWithColumns(line))
+    const text = isList ? formattedLines.join('\n') : formattedLines.join(' ')
+
+    const isTableRow = formattedLines.some(line => line.includes(' | '))
+
+    let cells: ParagraphCell[] | undefined
+    if (isTableRow && lines.length === 1) {
+        const extractedCells = extractCellsFromLine(lines[0])
+        if (extractedCells) {
+            cells = extractedCells
+        }
+    }
 
     const x = Math.min(...allItems.map(item => item.x))
     const y = Math.min(...allItems.map(item => item.y))
@@ -316,6 +384,8 @@ function buildParagraph(lines: PositionedTextItem[][]): Paragraph {
         fontWeight,
         fontStyle,
         isList,
+        isTableRow,
+        cells,
     }
 }
 

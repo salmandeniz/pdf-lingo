@@ -19,6 +19,18 @@ interface TranslationPanelProps {
   onWidthChange?: (width: number) => void
 }
 
+interface TranslatedCell {
+  translatedText: string
+  x: number
+  y: number
+  width: number
+  height: number
+  fontSize: number
+  fontFamily: string
+  fontWeight: 'normal' | 'bold'
+  fontStyle: 'normal' | 'italic'
+}
+
 interface TranslatedParagraph {
   translatedText: string
   x: number
@@ -32,6 +44,8 @@ interface TranslatedParagraph {
   marginTop: number
   lineHeight: number
   isList: boolean
+  isTableRow: boolean
+  cells?: TranslatedCell[]
 }
 
 interface ParagraphMask {
@@ -94,13 +108,19 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
         const lines = groupIntoLines(items)
         const paragraphs = groupIntoParagraphs(lines)
 
-        const padding = 6
-        const masks = paragraphs.map((p) => ({
-          x: p.x - padding,
-          y: p.y - padding,
-          width: pageInfo.width - p.x + padding,
-          height: p.height + padding * 2,
-        }))
+        const masks = paragraphs
+          .filter((p) => !p.isTableRow)
+          .map((p) => {
+            const verticalPadding = 4
+            const leftPadding = 2
+            const rightPadding = 4
+            return {
+              x: p.x - leftPadding,
+              y: p.y - verticalPadding,
+              width: p.width + leftPadding + rightPadding,
+              height: p.height + verticalPadding * 2,
+            }
+          })
         setParagraphMasks(masks)
 
         const results = await concurrentMap(
@@ -108,8 +128,35 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
           3,
           async (para: Paragraph) => {
             if (!para.text.trim()) return null
-            
+
             try {
+              let translatedCells: TranslatedCell[] | undefined
+
+              if (para.isTableRow && para.cells && para.cells.length > 0) {
+                translatedCells = await Promise.all(
+                  para.cells.map(async (cell) => {
+                    const cellResult = await translate(
+                      cell.text,
+                      settings.targetLanguage,
+                      settings.translationService,
+                      settings.openRouterApiKey,
+                      settings.openRouterModel
+                    )
+                    return {
+                      translatedText: cellResult.translatedText,
+                      x: cell.x,
+                      y: cell.y,
+                      width: cell.width,
+                      height: cell.height,
+                      fontSize: cell.fontSize,
+                      fontFamily: cell.fontFamily,
+                      fontWeight: cell.fontWeight,
+                      fontStyle: cell.fontStyle,
+                    }
+                  })
+                )
+              }
+
               const result = await translate(
                 para.text,
                 settings.targetLanguage,
@@ -131,6 +178,8 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
                 marginTop: 0,
                 lineHeight: calculateLineHeight(para),
                 isList: para.isList,
+                isTableRow: para.isTableRow,
+                cells: translatedCells,
               }
             } catch (error) {
               console.error('Translation failed for paragraph:', para.text.substring(0, 50), error)
@@ -417,26 +466,57 @@ export function TranslationPanel({ width, height, onWidthChange }: TranslationPa
                 )
               })
             ) : (
-              translatedParagraphs.map((para, idx) => (
-                <div
-                  key={`para-${idx}`}
-                  style={{
-                    marginLeft: para.x,
-                    marginTop: para.marginTop,
-                    maxWidth: para.width,
-                    fontSize: para.fontSize,
-                    fontFamily: para.fontFamily,
-                    fontWeight: para.fontWeight,
-                    fontStyle: para.fontStyle,
-                    color: '#000',
-                    lineHeight: para.lineHeight,
-                    whiteSpace: para.isList ? 'pre-line' : 'normal',
-                    wordWrap: 'break-word',
-                  }}
-                >
-                  {para.translatedText}
-                </div>
-              ))
+              translatedParagraphs.map((para, idx) => {
+                if (para.isTableRow && para.cells && para.cells.length > 0) {
+                  return para.cells.map((cell, cellIdx) => (
+                    <div
+                      key={`para-${idx}-cell-${cellIdx}`}
+                      style={{
+                        position: 'absolute',
+                        left: cell.x,
+                        top: cell.y,
+                        width: cell.width,
+                        fontSize: cell.fontSize,
+                        fontFamily: cell.fontFamily,
+                        fontWeight: cell.fontWeight,
+                        fontStyle: cell.fontStyle,
+                        color: '#000',
+                        lineHeight: 1.2,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        backgroundColor: bgColor,
+                      }}
+                    >
+                      {cell.translatedText}
+                    </div>
+                  ))
+                }
+
+                return (
+                  <div
+                    key={`para-${idx}`}
+                    style={{
+                      position: 'absolute',
+                      left: para.x,
+                      top: para.y,
+                      width: para.isTableRow ? para.width : undefined,
+                      maxWidth: para.isTableRow ? undefined : para.width,
+                      fontSize: para.fontSize,
+                      fontFamily: para.fontFamily,
+                      fontWeight: para.fontWeight,
+                      fontStyle: para.fontStyle,
+                      color: '#000',
+                      lineHeight: para.lineHeight,
+                      whiteSpace: para.isTableRow ? 'nowrap' : (para.isList ? 'pre-line' : 'normal'),
+                      wordWrap: para.isTableRow ? undefined : 'break-word',
+                      backgroundColor: bgColor,
+                    }}
+                  >
+                    {para.translatedText}
+                  </div>
+                )
+              })
             )}
           </div>
         </div>
