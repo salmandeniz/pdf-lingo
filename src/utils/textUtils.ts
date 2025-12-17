@@ -1,5 +1,41 @@
 import type { PositionedTextItem } from '../types'
 
+export interface TableCell {
+    text: string
+    x: number
+    y: number
+    width: number
+    height: number
+    fontSize: number
+    fontWeight: 'normal' | 'bold'
+    fontStyle: 'normal' | 'italic'
+    colIndex: number
+    rowIndex: number
+}
+
+export interface TableRow {
+    cells: TableCell[]
+    y: number
+    height: number
+}
+
+export interface Table {
+    rows: TableRow[]
+    columns: { x: number; width: number }[]
+    x: number
+    y: number
+    width: number
+    height: number
+    isHeader: boolean[]
+}
+
+export interface ContentBlock {
+    type: 'paragraph' | 'table'
+    paragraph?: Paragraph
+    table?: Table
+    y: number
+}
+
 export interface LineGeometry {
     mask: {
         x: number
@@ -22,6 +58,30 @@ export function getBackgroundColor(canvas: HTMLCanvasElement): string {
     // Sample a few pixels to be safer, but top-left (5,5) is usually fine for docs
     const pixel = ctx.getImageData(5, 5, 1, 1).data
     return `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`
+}
+
+function detectTableColumns(lineItems: PositionedTextItem[]): number[] | null {
+    if (lineItems.length < 2) return null
+
+    const sorted = [...lineItems].sort((a, b) => a.x - b.x)
+    const gaps: { index: number; gap: number; position: number }[] = []
+
+    for (let i = 1; i < sorted.length; i++) {
+        const prevItem = sorted[i - 1]
+        const currItem = sorted[i]
+        const gap = currItem.x - (prevItem.x + prevItem.width)
+        const avgFontSize = (prevItem.fontSize + currItem.fontSize) / 2
+
+        if (gap > avgFontSize * 2) {
+            gaps.push({ index: i, gap, position: currItem.x })
+        }
+    }
+
+    if (gaps.length > 0) {
+        return gaps.map(g => g.position)
+    }
+
+    return null
 }
 
 export function groupIntoLines(items: PositionedTextItem[]): PositionedTextItem[][] {
@@ -189,19 +249,40 @@ export function groupIntoParagraphs(lines: PositionedTextItem[][]): Paragraph[] 
     return paragraphs
 }
 
+function formatLineWithColumns(lineItems: PositionedTextItem[]): string {
+    const columns = detectTableColumns(lineItems)
+    const sorted = [...lineItems].sort((a, b) => a.x - b.x)
+
+    if (!columns || columns.length === 0) {
+        return sorted.map(item => item.str).join(' ')
+    }
+
+    const columnBoundaries = [0, ...columns, Infinity]
+    const cellTexts: string[] = []
+
+    for (let i = 0; i < columnBoundaries.length - 1; i++) {
+        const start = columnBoundaries[i]
+        const end = columnBoundaries[i + 1]
+        const cellItems = sorted.filter(item => item.x >= start && item.x < end)
+        if (cellItems.length > 0) {
+            cellTexts.push(cellItems.map(item => item.str).join(' '))
+        }
+    }
+
+    return cellTexts.join(' | ')
+}
+
 function buildParagraph(lines: PositionedTextItem[][]): Paragraph {
     const allItems = lines.flat()
-    
-    // Detect if this paragraph is a list
+
     const isList = isListParagraph(lines)
-    
-    // For lists, preserve line breaks; for regular paragraphs, join with spaces
-    const text = isList 
+
+    const text = isList
         ? lines
-            .map(line => line.sort((a, b) => a.x - b.x).map(item => item.str).join(' '))
+            .map(line => formatLineWithColumns(line))
             .join('\n')
         : lines
-            .map(line => line.sort((a, b) => a.x - b.x).map(item => item.str).join(' '))
+            .map(line => formatLineWithColumns(line))
             .join(' ')
 
     const x = Math.min(...allItems.map(item => item.x))
