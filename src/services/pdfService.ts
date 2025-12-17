@@ -14,6 +14,23 @@ export interface PdfPageInfo {
 
 export class PdfService {
   private document: pdfjsLib.PDFDocumentProxy | null = null
+  private currentRenderTask: pdfjsLib.RenderTask | null = null
+
+  private async cancelOngoingRender() {
+    if (!this.currentRenderTask) return
+
+    // Cancel any in-flight render to avoid concurrent canvas usage
+    this.currentRenderTask.cancel()
+    try {
+      await this.currentRenderTask.promise
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'name' in error && error.name === 'RenderingCancelledException')) {
+        console.error('Error while cancelling render task:', error)
+      }
+    } finally {
+      this.currentRenderTask = null
+    }
+  }
 
   async loadDocument(data: ArrayBuffer): Promise<number> {
     const loadingTask = pdfjsLib.getDocument({ data })
@@ -39,6 +56,9 @@ export class PdfService {
     const context = canvas.getContext('2d')
     if (!context) return null
 
+    // Ensure we don't render into the same canvas concurrently
+    await this.cancelOngoingRender()
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         // Set canvas dimensions
@@ -49,14 +69,14 @@ export class PdfService {
         context.clearRect(0, 0, canvas.width, canvas.height)
 
         // Create render task
-        const renderTask = page.render({
+        this.currentRenderTask = page.render({
           canvasContext: context,
           viewport,
           canvas,
         })
 
         // Wait for render to complete
-        await renderTask.promise
+        await this.currentRenderTask.promise
         return {
           pageNumber,
           width: viewport.width,
@@ -78,6 +98,8 @@ export class PdfService {
           console.error('Canvas render error:', error)
           throw error
         }
+      } finally {
+        this.currentRenderTask = null
       }
     }
 
