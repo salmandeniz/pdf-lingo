@@ -1,6 +1,6 @@
-# Tauri + React + Typescript
+# PDF Lingo
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+A desktop application built with Tauri, React, and TypeScript.
 
 ## Recommended IDE Setup
 
